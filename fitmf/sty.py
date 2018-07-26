@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as pp
 from scipy.special import gammaincc, gamma
-import astropy.units as U
 import emcee
 import corner
 
@@ -38,14 +37,8 @@ def _logProbability(theta, Mi, Mlim=0):
 class STYFitter(object):
 
     def __init__(self, Mi, Mlim, nwalkers=100):
-        try:
-            self.Mi = Mi.to(U.Msun).value
-        except AttributeError:
-            self.Mi = Mi
-        try:
-            self.Mlim = Mlim.to(U.Msun).value
-        except AttributeError:
-            self.Mlim = Mlim
+        self.Mi = Mi
+        self.Mlim = Mlim
         self.nwalkers = nwalkers
         self.ndim = 2
         self.sampler = emcee.EnsembleSampler(

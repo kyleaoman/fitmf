@@ -9,7 +9,7 @@ setup(
     author_email='koman@astro.rug.nl',
     license='GNU GPL v3',
     packages=['fitmf'],
-    install_requires=['numpy', 'astropy', 'matplotlib', 'emcee', 'corner'],
+    install_requires=['numpy', 'matplotlib', 'emcee', 'corner'],
     include_package_data=True,
     zip_safe=False
 )
