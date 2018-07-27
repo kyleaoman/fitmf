@@ -11,11 +11,33 @@ alpha, Mstar = theta
 Mlim = np.power(10, 8.5)
 input_norm = schechter.normalized_integral(theta, Mlim)
 N = 1000
+dmin, dmax = 5, 10
 
 Mi = schechter.simulate(N, theta, Mlim)
+di = dmin + np.random.rand(N) * (dmax - dmin) # random distances in interval
+dbins = np.linspace(dmin, dmax, 21)
+Mbins = np.arange(8.5, 11.51, .25)
 
-fitter = STYFitter(Mi, Mlim)
-fitter.fit(theta) #used input as guess
+
+def c(M, d):
+    # Completeness drops propto d^-2 and propto log10(M)
+    # (not entirely realistic but doesn't matter).
+    # For this example I contrive that Mlim(di) = 8.5, always,
+    # but there is a calculation solving explicitly for it to illustrate.
+    # Note that this will return c > 1 and c < 0 sometimes; the bounds are
+    # enforced elsewhere (STYFitter._cMatrix).
+    # Note: a good test is to return np.ones(M.shape), i.e. volume limited
+    return (.5 * M - 4.25) * (80. / 3. * np.power(d, -2) - 1. / 15.)
+
+
+mask = np.random.rand(N) < c(np.log10(Mi), di)
+Mi = Mi[mask]
+di = di[mask]
+print('After completeness simulation {0:.0f}/{1:.0f} remain.'.format(len(Mi), N))
+N = len(Mi) # should this actually be redefined, or does it mess up normalization?
+
+fitter = STYFitter(Mi, di, (c, Mbins, dbins), nwalkers=8)
+fitter.fit(theta, niter=5500, burn=500) # used input as guess
 theta_ml = (
     fitter.results['theta_ml'][0],
     np.power(10, fitter.results['theta_ml'][1])

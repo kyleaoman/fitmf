@@ -1,52 +1,68 @@
 import numpy as np
 import matplotlib.pyplot as pp
 from scipy.special import gammaincc, gamma
+from scipy.optimize import fsolve
+from scipy.stats import binned_statistic_2d
 import emcee
 import corner
 
 
-def _logPrior(theta, Mlim=0):
+def _logPrior(theta, Mlimi):
     alpha, Mstar = theta
-    if (Mstar > np.log10(Mlim)) and (alpha > -1):
+    if (Mstar > Mlimi).any() and (alpha > -1):
         return 0.0
     else:
         return -np.inf
 
 
-def _logLikelihood(theta, Mi, Mlim=0):
+def _logLikelihood(theta, Mi, Mlimi, cMbins, cdbins, ci, cdi):
     alpha, Mstar = theta
+    denominator = np.sum(
+        cdi * gamma(alpha + 1) *
+        (
+            gammaincc(alpha + 1, np.power(10, cMbins[:-1] - Mstar)) -
+            gammaincc(alpha + 1, np.power(10, cMbins[1:] - Mstar))
+        )[:, np.newaxis],
+        axis=0
+    )
     return np.sum(
+        ci +
         alpha * np.log(Mi / np.power(10, Mstar)) - 
         Mi / np.power(10, Mstar) - 
         np.log(np.power(10, Mstar)) - 
-        np.log(
-            gammaincc(alpha + 1, Mlim / np.power(10, Mstar)) *
-            gamma(alpha + 1)
-        )
+        np.log(denominator)
     )
 
 
-def _logProbability(theta, Mi, Mlim=0):
-    lp = _logPrior(theta, Mlim=Mlim)
+def _logProbability(theta, Mi, Mlimi, cMbins, cdbins, ci, cdi):
+    lp = _logPrior(theta, Mlimi)
     if not np.isfinite(lp):
         return -np.inf
     else:
-        return lp + _logLikelihood(theta, Mi, Mlim=Mlim)
+        return lp + _logLikelihood(theta, Mi, Mlimi, cMbins, cdbins, ci, cdi)
 
 
 class STYFitter(object):
 
-    def __init__(self, Mi, Mlim, nwalkers=100):
+    def __init__(self, Mi, di, cbundle, nwalkers=100):
+        self.cMbins, self.cdbins = cbundle[1], cbundle[2]
+        self.Mindices, self.dindices = \
+            binned_statistic_2d(np.log10(Mi), di, None, statistic='count',
+                                bins=[self.cMbins, self.cdbins],
+                                expand_binnumbers=True)[3]
+        self.cdi = self._cMatrix(*cbundle)[:, self.dindices - 1]
+        self.ci = self.cdi[(self.Mindices - 1, np.arange(len(Mi)))]
         self.Mi = Mi
-        self.Mlim = Mlim
+        self.di = di
+        self.Mlimi = self._Mlim(self.di, cbundle[0])
         self.nwalkers = nwalkers
         self.ndim = 2
         self.sampler = emcee.EnsembleSampler(
             self.nwalkers,
             self.ndim,
             _logProbability,
-            args=(self.Mi, ),
-            kwargs={'Mlim': self.Mlim}
+            args=(self.Mi, self.Mlimi, self.cMbins, self.cdbins,
+                  self.ci, self.cdi),
         )
         self.results = None
         return
@@ -81,3 +97,15 @@ class STYFitter(object):
         if save is not None:
             pp.savefig(save, format=save_format)
         return
+    
+    def _cMatrix(self, cfunction, Mbins, dbins):
+        dmids = .5 * (dbins[1:] + dbins[:-1])
+        Mmids = .5 * (Mbins[1:] + Mbins[:-1])
+        dgrid, Mgrid = np.meshgrid(dmids, Mmids)
+        retval = cfunction(Mgrid, dgrid)
+        retval[retval > 1] = 1
+        retval[retval < 0] = 0
+        return retval
+    
+    def _Mlim(self, d, c):
+        return fsolve(lambda M: c(M, d), np.zeros(d.shape))
