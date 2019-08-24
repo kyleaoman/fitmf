@@ -34,7 +34,7 @@ mask = np.random.rand(N) < c(np.log10(Mi), di)
 Mi = Mi[mask]
 di = di[mask]
 print('After completeness simulation {0:.0f}/{1:.0f} remain.'.format(len(Mi), N))
-N = len(Mi) # should this actually be redefined, or does it mess up normalization?
+#N = len(Mi) # should this actually be redefined, or does it mess up normalization?
 
 fitter = STYFitter(Mi, di, (c, Mbins, dbins), nwalkers=8)
 fitter.fit(theta, niter=5500, burn=500) # used input as guess
